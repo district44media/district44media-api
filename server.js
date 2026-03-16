@@ -48,29 +48,35 @@ app.get("/test-checkout", async (req, res) => {
 
 app.post("/create-checkout", async (req, res) => {
   try {
+    const { amount, description, email } = req.body
+
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       payment_method_types: ["card"],
+      customer_email: email,
+
       line_items: [
         {
           price_data: {
             currency: "eur",
             product_data: {
-              name: "Digital promotion services",
+              name: description || "Digital promotion services",
             },
-            unit_amount: 4900,
+            unit_amount: Math.round(amount * 100),
           },
           quantity: 1,
         },
       ],
+
       success_url: "https://district44media.com/success",
       cancel_url: "https://district44media.com/cancel",
     })
 
-    return res.json({ url: session.url })
+    res.json({ url: session.url })
+
   } catch (error) {
     console.error("Stripe error:", error.message)
-    return res.status(500).json({ error: "Unable to create checkout session" })
+    res.status(500).json({ error: "Unable to create checkout session" })
   }
 })
 
