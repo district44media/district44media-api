@@ -48,35 +48,56 @@ app.get("/test-checkout", async (req, res) => {
 
 app.post("/create-checkout", async (req, res) => {
   try {
-    const { amount, description, email } = req.body
+    const {
+      firstName,
+      lastName,
+      email,
+      company,
+      description,
+      reference,
+      amount
+    } = req.body
+
+    const parsedAmount = Number(amount)
+
+    if (!email || !description || !Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+  return res.status(400).json({ error: "Missing or invalid payment data." })
+    }
+
+    if (parsedAmount < 10) {
+  return res.status(400).json({ error: "Minimum payment amount is €10." })
+    }
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       payment_method_types: ["card"],
       customer_email: email,
-
       line_items: [
         {
           price_data: {
             currency: "eur",
             product_data: {
-              name: description || "Digital promotion services",
+              name: description
             },
-            unit_amount: Math.round(amount * 100),
+            unit_amount: Math.round(parsedAmount * 100)
           },
-          quantity: 1,
-        },
+          quantity: 1
+        }
       ],
-
       success_url: "https://district44media.com/success",
       cancel_url: "https://district44media.com/cancel",
+      metadata: {
+        first_name: firstName || "",
+        last_name: lastName || "",
+        company: company || "",
+        invoice_reference: reference || ""
+      }
     })
 
-    res.json({ url: session.url })
-
+    return res.json({ url: session.url })
   } catch (error) {
     console.error("Stripe error:", error.message)
-    res.status(500).json({ error: "Unable to create checkout session" })
+    return res.status(500).json({ error: "Unable to create checkout session" })
   }
 })
 
