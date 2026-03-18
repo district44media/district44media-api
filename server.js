@@ -81,8 +81,8 @@ app.get("/test-checkout", async (req, res) => {
           quantity: 1,
         },
       ],
-      success_url: "https://district44media.com/success?session_id={CHECKOUT_SESSION_ID}",
-      cancel_url: "https://district44media.com/cancel",
+      success_url: "https://www.district44media.com/success?session_id={CHECKOUT_SESSION_ID}",
+      cancel_url: "https://www.district44media.com/cancel",
     });
 
     return res.redirect(session.url);
@@ -131,8 +131,8 @@ app.post("/create-checkout", async (req, res) => {
           quantity: 1,
         },
       ],
-      success_url: "https://district44media.com/success?session_id={CHECKOUT_SESSION_ID}",
-      cancel_url: "https://district44media.com/cancel",
+      success_url: "https://www.district44media.com/success?session_id={CHECKOUT_SESSION_ID}",
+      cancel_url: "https://www.district44media.com/cancel",
       metadata: {
         first_name: firstName || "",
         last_name: lastName || "",
