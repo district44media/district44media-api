@@ -3,10 +3,15 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const Stripe = require("stripe");
+const { createClient } = require("@supabase/supabase-js");
 const { PLAN_CATALOG } = require("./catalog/plans");
 
 const app = express();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 // Webhook Stripe : DOIT être déclaré avant express.json()
 app.post("/stripe-webhook", express.raw({ type: "application/json" }), (req, res) => {
