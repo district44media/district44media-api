@@ -1,55 +1,62 @@
 const PLAN_CATALOG = {
-  // CLUB
-  club_7: {
-    planType: "club",
+  // STARTER (Escovia: Club)
+  starter_7: {
+    internalPlanType: "club",
+    neutralPlanCode: "starter_7",
     durationDays: 7,
     amount: 29,
     currency: "chf",
     stripeLabel: "Digital visibility package",
     stripeDescription: "Online promotion and visibility service",
   },
-  club_15: {
-    planType: "club",
+  starter_15: {
+    internalPlanType: "club",
+    neutralPlanCode: "starter_15",
     durationDays: 15,
     amount: 49,
     currency: "chf",
     stripeLabel: "Digital visibility package",
     stripeDescription: "Online promotion and visibility service",
   },
-  club_20: {
-    planType: "club",
+  starter_20: {
+    internalPlanType: "club",
+    neutralPlanCode: "starter_20",
     durationDays: 20,
     amount: 59,
     currency: "chf",
     stripeLabel: "Digital visibility package",
     stripeDescription: "Online promotion and visibility service",
   },
-  club_30: {
-    planType: "club",
+  starter_30: {
+    internalPlanType: "club",
+    neutralPlanCode: "starter_30",
     durationDays: 30,
     amount: 89,
     currency: "chf",
     stripeLabel: "Digital visibility package",
     stripeDescription: "Online promotion and visibility service",
   },
-  club_60: {
-    planType: "club",
+  starter_60: {
+    internalPlanType: "club",
+    neutralPlanCode: "starter_60",
     durationDays: 60,
     amount: 169,
     currency: "chf",
     stripeLabel: "Digital visibility package",
     stripeDescription: "Online promotion and visibility service",
   },
-  club_90: {
-    planType: "club",
+  starter_90: {
+    internalPlanType: "club",
+    neutralPlanCode: "starter_90",
     durationDays: 90,
     amount: 239,
     currency: "chf",
     stripeLabel: "Digital visibility package",
     stripeDescription: "Online promotion and visibility service",
   },
-  club_180: {
-    planType: "club",
+  starter_180: {
+    internalPlanType: "club",
+    neutralPlanCode: "starter_180",
     durationDays: 180,
     amount: 449,
     currency: "chf",
@@ -57,57 +64,64 @@ const PLAN_CATALOG = {
     stripeDescription: "Online promotion and visibility service",
   },
 
-  // PRIVILEGE
-  privilege_7: {
-    planType: "privilege",
+  // GROWTH (Escovia: Privilege)
+  growth_7: {
+    internalPlanType: "privilege",
+    neutralPlanCode: "growth_7",
     durationDays: 7,
     amount: 79,
     currency: "chf",
     stripeLabel: "Featured visibility package",
     stripeDescription: "Online promotion and visibility service",
   },
-  privilege_10: {
-    planType: "privilege",
+  growth_10: {
+    internalPlanType: "privilege",
+    neutralPlanCode: "growth_10",
     durationDays: 10,
     amount: 99,
     currency: "chf",
     stripeLabel: "Featured visibility package",
     stripeDescription: "Online promotion and visibility service",
   },
-  privilege_15: {
-    planType: "privilege",
+  growth_15: {
+    internalPlanType: "privilege",
+    neutralPlanCode: "growth_15",
     durationDays: 15,
     amount: 139,
     currency: "chf",
     stripeLabel: "Featured visibility package",
     stripeDescription: "Online promotion and visibility service",
   },
-  privilege_20: {
-    planType: "privilege",
+  growth_20: {
+    internalPlanType: "privilege",
+    neutralPlanCode: "growth_20",
     durationDays: 20,
     amount: 169,
     currency: "chf",
     stripeLabel: "Featured visibility package",
     stripeDescription: "Online promotion and visibility service",
   },
-  privilege_30: {
-    planType: "privilege",
+  growth_30: {
+    internalPlanType: "privilege",
+    neutralPlanCode: "growth_30",
     durationDays: 30,
     amount: 189,
     currency: "chf",
     stripeLabel: "Featured visibility package",
     stripeDescription: "Online promotion and visibility service",
   },
-  privilege_60: {
-    planType: "privilege",
+  growth_60: {
+    internalPlanType: "privilege",
+    neutralPlanCode: "growth_60",
     durationDays: 60,
     amount: 349,
     currency: "chf",
     stripeLabel: "Featured visibility package",
     stripeDescription: "Online promotion and visibility service",
   },
-  privilege_90: {
-    planType: "privilege",
+  growth_90: {
+    internalPlanType: "privilege",
+    neutralPlanCode: "growth_90",
     durationDays: 90,
     amount: 499,
     currency: "chf",
@@ -115,73 +129,82 @@ const PLAN_CATALOG = {
     stripeDescription: "Online promotion and visibility service",
   },
 
-  // ELITE
-  elite_3: {
-    planType: "elite",
+  // ADVANCED (Escovia: Elite)
+  advanced_3: {
+    internalPlanType: "elite",
+    neutralPlanCode: "advanced_3",
     durationDays: 3,
     amount: 79,
     currency: "chf",
     stripeLabel: "Featured visibility package",
     stripeDescription: "Online promotion and visibility service",
   },
-  elite_5: {
-    planType: "elite",
+  advanced_5: {
+    internalPlanType: "elite",
+    neutralPlanCode: "advanced_5",
     durationDays: 5,
     amount: 99,
     currency: "chf",
     stripeLabel: "Featured visibility package",
     stripeDescription: "Online promotion and visibility service",
   },
-  elite_7: {
-    planType: "elite",
+  advanced_7: {
+    internalPlanType: "elite",
+    neutralPlanCode: "advanced_7",
     durationDays: 7,
     amount: 129,
     currency: "chf",
     stripeLabel: "Featured visibility package",
     stripeDescription: "Online promotion and visibility service",
   },
-  elite_10: {
-    planType: "elite",
+  advanced_10: {
+    internalPlanType: "elite",
+    neutralPlanCode: "advanced_10",
     durationDays: 10,
     amount: 149,
     currency: "chf",
     stripeLabel: "Featured visibility package",
     stripeDescription: "Online promotion and visibility service",
   },
-  elite_15: {
-    planType: "elite",
+  advanced_15: {
+    internalPlanType: "elite",
+    neutralPlanCode: "advanced_15",
     durationDays: 15,
     amount: 179,
     currency: "chf",
     stripeLabel: "Featured visibility package",
     stripeDescription: "Online promotion and visibility service",
   },
-  elite_20: {
-    planType: "elite",
+  advanced_20: {
+    internalPlanType: "elite",
+    neutralPlanCode: "advanced_20",
     durationDays: 20,
     amount: 209,
     currency: "chf",
     stripeLabel: "Featured visibility package",
     stripeDescription: "Online promotion and visibility service",
   },
-  elite_30: {
-    planType: "elite",
+  advanced_30: {
+    internalPlanType: "elite",
+    neutralPlanCode: "advanced_30",
     durationDays: 30,
     amount: 249,
     currency: "chf",
     stripeLabel: "Featured visibility package",
     stripeDescription: "Online promotion and visibility service",
   },
-  elite_60: {
-    planType: "elite",
+  advanced_60: {
+    internalPlanType: "elite",
+    neutralPlanCode: "advanced_60",
     durationDays: 60,
     amount: 459,
     currency: "chf",
     stripeLabel: "Featured visibility package",
     stripeDescription: "Online promotion and visibility service",
   },
-  elite_90: {
-    planType: "elite",
+  advanced_90: {
+    internalPlanType: "elite",
+    neutralPlanCode: "advanced_90",
     durationDays: 90,
     amount: 649,
     currency: "chf",
@@ -189,97 +212,109 @@ const PLAN_CATALOG = {
     stripeDescription: "Online promotion and visibility service",
   },
 
-  // SUPREME
-  supreme_1: {
-    planType: "supreme",
+  // PROFESSIONAL (Escovia: Supreme)
+  professional_1: {
+    internalPlanType: "supreme",
+    neutralPlanCode: "professional_1",
     durationDays: 1,
     amount: 49,
     currency: "chf",
     stripeLabel: "Premium visibility package",
     stripeDescription: "Online promotion and visibility service",
   },
-  supreme_2: {
-    planType: "supreme",
+  professional_2: {
+    internalPlanType: "supreme",
+    neutralPlanCode: "professional_2",
     durationDays: 2,
     amount: 79,
     currency: "chf",
     stripeLabel: "Premium visibility package",
     stripeDescription: "Online promotion and visibility service",
   },
-  supreme_3: {
-    planType: "supreme",
+  professional_3: {
+    internalPlanType: "supreme",
+    neutralPlanCode: "professional_3",
     durationDays: 3,
     amount: 109,
     currency: "chf",
     stripeLabel: "Premium visibility package",
     stripeDescription: "Online promotion and visibility service",
   },
-  supreme_4: {
-    planType: "supreme",
+  professional_4: {
+    internalPlanType: "supreme",
+    neutralPlanCode: "professional_4",
     durationDays: 4,
     amount: 129,
     currency: "chf",
     stripeLabel: "Premium visibility package",
     stripeDescription: "Online promotion and visibility service",
   },
-  supreme_5: {
-    planType: "supreme",
+  professional_5: {
+    internalPlanType: "supreme",
+    neutralPlanCode: "professional_5",
     durationDays: 5,
     amount: 149,
     currency: "chf",
     stripeLabel: "Premium visibility package",
     stripeDescription: "Online promotion and visibility service",
   },
-  supreme_7: {
-    planType: "supreme",
+  professional_7: {
+    internalPlanType: "supreme",
+    neutralPlanCode: "professional_7",
     durationDays: 7,
     amount: 179,
     currency: "chf",
     stripeLabel: "Premium visibility package",
     stripeDescription: "Online promotion and visibility service",
   },
-  supreme_14: {
-    planType: "supreme",
+  professional_14: {
+    internalPlanType: "supreme",
+    neutralPlanCode: "professional_14",
     durationDays: 14,
     amount: 259,
     currency: "chf",
     stripeLabel: "Premium visibility package",
     stripeDescription: "Online promotion and visibility service",
   },
-  supreme_20: {
-    planType: "supreme",
+  professional_20: {
+    internalPlanType: "supreme",
+    neutralPlanCode: "professional_20",
     durationDays: 20,
     amount: 299,
     currency: "chf",
     stripeLabel: "Premium visibility package",
     stripeDescription: "Online promotion and visibility service",
   },
-  supreme_25: {
-    planType: "supreme",
+  professional_25: {
+    internalPlanType: "supreme",
+    neutralPlanCode: "professional_25",
     durationDays: 25,
     amount: 329,
     currency: "chf",
     stripeLabel: "Premium visibility package",
     stripeDescription: "Online promotion and visibility service",
   },
-  supreme_30: {
-    planType: "supreme",
+  professional_30: {
+    internalPlanType: "supreme",
+    neutralPlanCode: "professional_30",
     durationDays: 30,
     amount: 349,
     currency: "chf",
     stripeLabel: "Premium visibility package",
     stripeDescription: "Online promotion and visibility service",
   },
-  supreme_60: {
-    planType: "supreme",
+  professional_60: {
+    internalPlanType: "supreme",
+    neutralPlanCode: "professional_60",
     durationDays: 60,
     amount: 649,
     currency: "chf",
     stripeLabel: "Premium visibility package",
     stripeDescription: "Online promotion and visibility service",
   },
-  supreme_90: {
-    planType: "supreme",
+  professional_90: {
+    internalPlanType: "supreme",
+    neutralPlanCode: "professional_90",
     durationDays: 90,
     amount: 899,
     currency: "chf",
