@@ -264,8 +264,8 @@ app.post("/create-platform-checkout", async (req, res) => {
           quantity: 1,
         },
       ],
-      success_url: "https://www.district44media.com/success?session_id={CHECKOUT_SESSION_ID}",
-      cancel_url: "https://www.district44media.com/cancel",
+      success_url: "https://www.district44media.com/success?flow=checkout&session_id={CHECKOUT_SESSION_ID}",
+      cancel_url: "https://www.district44media.com/cancel?flow=checkout",
       metadata: {
         source: "platform",
         user_id: String(user_id),
