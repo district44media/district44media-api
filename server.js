@@ -3,6 +3,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const Stripe = require("stripe");
+const { PLAN_CATALOG } = require("./catalog/plans");
 
 const app = express();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
@@ -147,6 +148,56 @@ app.post("/create-checkout", async (req, res) => {
   } catch (error) {
     console.error("Stripe error:", error.message);
     return res.status(500).json({ error: "Unable to create checkout session" });
+  }
+});
+
+app.post("/create-escovia-checkout", async (req, res) => {
+  try {
+    const { user_id, listing_id, plan_code, locale } = req.body;
+
+    if (!user_id || !plan_code) {
+      return res.status(400).json({ error: "Missing required fields: user_id and plan_code." });
+    }
+
+    const plan = PLAN_CATALOG[plan_code];
+
+    if (!plan) {
+      return res.status(400).json({ error: "Invalid plan_code." });
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      payment_method_types: ["card"],
+      line_items: [
+        {
+          price_data: {
+            currency: plan.currency,
+            product_data: {
+              name: plan.stripeLabel,
+              description: plan.stripeDescription,
+            },
+            unit_amount: Math.round(plan.amount * 100),
+          },
+          quantity: 1,
+        },
+      ],
+      success_url: "https://www.district44media.com/success?session_id={CHECKOUT_SESSION_ID}",
+      cancel_url: "https://www.district44media.com/cancel",
+      metadata: {
+        source: "escovia",
+        user_id: String(user_id),
+        listing_id: listing_id ? String(listing_id) : "",
+        plan_code: String(plan_code),
+        internal_plan_type: String(plan.internalPlanType),
+        duration_days: String(plan.durationDays),
+        locale: locale ? String(locale) : "fr",
+      },
+    });
+
+    return res.json({ checkoutUrl: session.url });
+  } catch (error) {
+    console.error("Escovia Stripe error:", error.message);
+    return res.status(500).json({ error: "Unable to create Escovia checkout session" });
   }
 });
 
