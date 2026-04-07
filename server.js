@@ -14,8 +14,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 // Webhook Stripe : DOIT être déclaré avant express.json()
-app.post("/stripe-webhook", express.raw({ type: "application/json" }), (req, res) => {
-  const signature = req.headers["stripe-signature"];
+app.post("/stripe-webhook", express.raw({ type: "application/json" }), async (req, res) => {  const signature = req.headers["stripe-signature"];
 
   let event;
 
@@ -33,19 +32,98 @@ app.post("/stripe-webhook", express.raw({ type: "application/json" }), (req, res
   try {
     switch (event.type) {
       case "checkout.session.completed": {
-        const session = event.data.object;
+  const session = event.data.object;
+  const metadata = session.metadata || {};
 
-        console.log("✅ Payment successful");
-        console.log("Session ID:", session.id);
-        console.log("Customer email:", session.customer_email);
-        console.log("Metadata:", session.metadata);
+  console.log("✅ Payment successful");
+  console.log("Session ID:", session.id);
+  console.log("Customer email:", session.customer_email);
+  console.log("Metadata:", metadata);
 
-        // Ici plus tard tu pourras :
-        // - enregistrer le paiement en base
-        // - envoyer un email
-        // - générer une facture
-        break;
-      }
+  if (metadata.source !== "platform") {
+    console.log("ℹ️ Non-platform checkout, skipping platform activation logic.");
+    break;
+  }
+
+  const userId = metadata.user_id;
+  const listingId = metadata.listing_id || null;
+  const internalPlanType = metadata.internal_plan_type;
+  const durationDays = Number(metadata.duration_days);
+
+  if (!userId || !internalPlanType || !Number.isFinite(durationDays) || durationDays <= 0) {
+    console.error("❌ Missing or invalid platform metadata.");
+    break;
+  }
+
+  // 1. Update provider_profiles.plan_type
+  const { error: profileError } = await supabase
+    .from("provider_profiles")
+    .update({
+      plan_type: internalPlanType,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("user_id", userId);
+
+  if (profileError) {
+    console.error("❌ Failed to update provider_profiles:", profileError.message);
+    throw profileError;
+  }
+
+  // 2. Load current listing expiry
+  let listingQuery = supabase
+    .from("listings")
+    .select("id, premium_expiry")
+    .eq("owner_id", userId);
+
+  if (listingId) {
+    listingQuery = listingQuery.eq("id", listingId);
+  }
+
+  const { data: listingsData, error: listingsFetchError } = await listingQuery;
+
+  if (listingsFetchError) {
+    console.error("❌ Failed to load listings:", listingsFetchError.message);
+    throw listingsFetchError;
+  }
+
+  if (!listingsData || listingsData.length === 0) {
+    console.warn("⚠️ No listing found for platform payment activation.");
+    break;
+  }
+
+  // 3. Extend premium_expiry from current expiry if still active, otherwise from now
+  for (const listing of listingsData) {
+    const now = new Date();
+    const currentExpiry = listing.premium_expiry ? new Date(listing.premium_expiry) : null;
+
+    const baseDate =
+      currentExpiry && currentExpiry.getTime() > now.getTime()
+        ? currentExpiry
+        : now;
+
+    const newExpiry = new Date(baseDate);
+    newExpiry.setDate(newExpiry.getDate() + durationDays);
+
+    const { error: listingUpdateError } = await supabase
+      .from("listings")
+      .update({
+        premium_expiry: newExpiry.toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", listing.id);
+
+    if (listingUpdateError) {
+      console.error(
+        `❌ Failed to update listing ${listing.id}:`,
+        listingUpdateError.message
+      );
+      throw listingUpdateError;
+    }
+  }
+
+  console.log("✅ Platform plan activated successfully.");
+  break;
+}
 
       default:
         console.log(`ℹ️ Unhandled Stripe event type: ${event.type}`);
@@ -156,7 +234,7 @@ app.post("/create-checkout", async (req, res) => {
   }
 });
 
-app.post("/create-escovia-checkout", async (req, res) => {
+app.post("/create-platform-checkout", async (req, res) => {
   try {
     const { user_id, listing_id, plan_code, locale } = req.body;
 
@@ -189,7 +267,7 @@ app.post("/create-escovia-checkout", async (req, res) => {
       success_url: "https://www.district44media.com/success?session_id={CHECKOUT_SESSION_ID}",
       cancel_url: "https://www.district44media.com/cancel",
       metadata: {
-        source: "escovia",
+        source: "platform",
         user_id: String(user_id),
         listing_id: listing_id ? String(listing_id) : "",
         plan_code: String(plan_code),
@@ -201,8 +279,8 @@ app.post("/create-escovia-checkout", async (req, res) => {
 
     return res.json({ checkoutUrl: session.url });
   } catch (error) {
-    console.error("Escovia Stripe error:", error.message);
-    return res.status(500).json({ error: "Unable to create Escovia checkout session" });
+    console.error("platform Stripe error:", error.message);
+    return res.status(500).json({ error: "Unable to create platform checkout session" });
   }
 });
 
