@@ -72,7 +72,7 @@ app.post("/stripe-webhook", express.raw({ type: "application/json" }), async (re
   // 2. Load current listing expiry
   let listingQuery = supabase
     .from("listings")
-    .select("id, premium_expiry")
+    .select("id, plan, premium_level, premium_expiry")
     .eq("owner_id", userId);
 
   if (listingId) {
@@ -91,11 +91,41 @@ app.post("/stripe-webhook", express.raw({ type: "application/json" }), async (re
     break;
   }
 
-  // 3. Extend premium_expiry from current expiry if still active, otherwise from now
+  // 3. Apply renewal logic:
+  // - same active plan => extend from current expiry
+  // - different active plan => pause current plan and activate new one from now
+  // - expired or inactive plan => activate from now
   for (const listing of listingsData) {
-    const now = new Date();
-    const currentExpiry = listing.premium_expiry ? new Date(listing.premium_expiry) : null;
+  const now = new Date();
+  const currentExpiry = listing.premium_expiry ? new Date(listing.premium_expiry) : null;
 
+  const currentPlan =
+    listing.premium_level ||
+    listing.plan ||
+    "club";
+
+  const hasActivePlan =
+    currentExpiry && currentExpiry.getTime() > now.getTime();
+
+  const isSamePlan = currentPlan === internalPlanType;
+
+  let listingUpdates = {
+    updated_at: new Date().toISOString(),
+  };
+
+  if (hasActivePlan && !isSamePlan) {
+    const remainingMs = currentExpiry.getTime() - now.getTime();
+    const remainingHours = Math.max(0, Math.ceil(remainingMs / (1000 * 60 * 60)));
+
+    listingUpdates.paused_plan_type = currentPlan;
+    listingUpdates.paused_plan_remaining_hours = remainingHours;
+    listingUpdates.paused_plan_locked_at = now.toISOString();
+
+    const newExpiry = new Date(now);
+    newExpiry.setDate(newExpiry.getDate() + durationDays);
+
+    listingUpdates.premium_expiry = newExpiry.toISOString();
+  } else {
     const baseDate =
       currentExpiry && currentExpiry.getTime() > now.getTime()
         ? currentExpiry
@@ -104,22 +134,22 @@ app.post("/stripe-webhook", express.raw({ type: "application/json" }), async (re
     const newExpiry = new Date(baseDate);
     newExpiry.setDate(newExpiry.getDate() + durationDays);
 
-    const { error: listingUpdateError } = await supabase
-      .from("listings")
-      .update({
-        premium_expiry: newExpiry.toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", listing.id);
-
-    if (listingUpdateError) {
-      console.error(
-        `❌ Failed to update listing ${listing.id}:`,
-        listingUpdateError.message
-      );
-      throw listingUpdateError;
-    }
+    listingUpdates.premium_expiry = newExpiry.toISOString();
   }
+
+  const { error: listingUpdateError } = await supabase
+    .from("listings")
+    .update(listingUpdates)
+    .eq("id", listing.id);
+
+  if (listingUpdateError) {
+    console.error(
+      `❌ Failed to update listing ${listing.id}:`,
+      listingUpdateError.message
+    );
+    throw listingUpdateError;
+  }
+}
 
   console.log("✅ Platform plan activated successfully.");
   break;
