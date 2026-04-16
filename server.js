@@ -119,6 +119,11 @@ app.post("/stripe-webhook", express.raw({ type: "application/json" }), async (re
     break;
   }
 
+  if (checkoutRecord.status === "paid") {
+  console.log("ℹ️ Checkout already processed, skipping.");
+  break;
+}
+
   const userId = checkoutRecord.user_id;
   const listingId = checkoutRecord.listing_id || null;
   const internalPlanType = checkoutRecord.internal_plan_type;
@@ -250,37 +255,36 @@ app.post("/stripe-webhook", express.raw({ type: "application/json" }), async (re
     };
 
     if (hasActivePlan && !isSamePlan) {
-      const shouldPauseCurrentPlan = currentPlan !== "free";
+  const shouldPauseCurrentPlan = currentPlan !== "free";
 
-      if (shouldPauseCurrentPlan) {
-        const remainingMs = currentExpiry.getTime() - now.getTime();
-        const remainingHours = Math.max(
-          0,
-          Math.ceil(remainingMs / (1000 * 60 * 60))
-        );
+  if (shouldPauseCurrentPlan) {
+    const remainingMs = currentExpiry.getTime() - now.getTime();
+    const remainingHours = Math.max(
+      0,
+      Math.ceil(remainingMs / (1000 * 60 * 60))
+    );
 
-        listingUpdates.paused_plan_type = currentPlan;
-        listingUpdates.paused_plan_remaining_hours = remainingHours;
-        listingUpdates.paused_plan_locked_at = now.toISOString();
-      } else {
-        listingUpdates.paused_plan_type = null;
-        listingUpdates.paused_plan_remaining_hours = null;
-        listingUpdates.paused_plan_locked_at = null;
-      }
+    await supabase.from("paused_plans").insert({
+      user_id: userId,
+      listing_id: listing.id,
+      plan_type: currentPlan,
+      remaining_hours: remainingHours,
+    });
+  }
 
-      const newExpiry = new Date(now);
-      newExpiry.setDate(newExpiry.getDate() + durationDays);
-      listingUpdates.premium_expiry = newExpiry.toISOString();
-    } else {
-      const baseDate =
-        currentExpiry && currentExpiry.getTime() > now.getTime()
-          ? currentExpiry
-          : now;
+  const newExpiry = new Date(now);
+  newExpiry.setDate(newExpiry.getDate() + durationDays);
+  listingUpdates.premium_expiry = newExpiry.toISOString();
+} else {
+  const baseDate =
+    currentExpiry && currentExpiry.getTime() > now.getTime()
+      ? currentExpiry
+      : now;
 
-      const newExpiry = new Date(baseDate);
-      newExpiry.setDate(newExpiry.getDate() + durationDays);
-      listingUpdates.premium_expiry = newExpiry.toISOString();
-    }
+  const newExpiry = new Date(baseDate);
+  newExpiry.setDate(newExpiry.getDate() + durationDays);
+  listingUpdates.premium_expiry = newExpiry.toISOString();
+}
 
     const { error: listingUpdateError } = await supabase
       .from("listings")
