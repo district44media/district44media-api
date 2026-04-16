@@ -247,6 +247,12 @@ app.post("/stripe-webhook", express.raw({ type: "application/json" }), async (re
 
     const isSamePlan = currentPlan === internalPlanType;
 
+    console.log("🧠 DEBUG PLAN CHECK", {
+  currentPlan,
+  internalPlanType,
+  hasActivePlan,
+  isSamePlan
+});
     let listingUpdates = {
       updated_at: new Date().toISOString(),
       plan: internalPlanType,
@@ -255,6 +261,7 @@ app.post("/stripe-webhook", express.raw({ type: "application/json" }), async (re
     };
 
     if (hasActivePlan && !isSamePlan) {
+      console.log("⏸️ ENTERING PAUSE LOGIC");
   const shouldPauseCurrentPlan = currentPlan !== "free";
 
   if (shouldPauseCurrentPlan) {
@@ -264,12 +271,27 @@ app.post("/stripe-webhook", express.raw({ type: "application/json" }), async (re
       Math.ceil(remainingMs / (1000 * 60 * 60))
     );
 
-    await supabase.from("paused_plans").insert({
-      user_id: userId,
-      listing_id: listing.id,
-      plan_type: currentPlan,
-      remaining_hours: remainingHours,
-    });
+   console.log("🧠 PAUSE DETAILS", {
+  userId,
+  listingId: listing.id,
+  currentPlan,
+  remainingHours,
+});
+
+const { error: pausedPlanError } = await supabase
+  .from("paused_plans")
+  .insert({
+    user_id: userId,
+    listing_id: listing.id,
+    plan_type: currentPlan,
+    remaining_hours: remainingHours,
+  });
+
+if (pausedPlanError) {
+  console.error("❌ PAUSED PLAN INSERT ERROR:", pausedPlanError);
+} else {
+  console.log("✅ PAUSED PLAN INSERTED");
+}
   }
 
   const newExpiry = new Date(now);
