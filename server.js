@@ -237,10 +237,10 @@ app.post("/stripe-webhook", express.raw({ type: "application/json" }), async (re
     const now = new Date();
     const currentExpiry = listing.premium_expiry ? new Date(listing.premium_expiry) : null;
 
-    const currentPlan =
-      listing.premium_level ||
-      listing.plan ||
-      "club";
+   const currentPlan =
+  listing.premium_level ||
+  (listing.plan === "free" ? "club" : listing.plan) ||
+  "club";
 
     const hasActivePlan =
       currentExpiry && currentExpiry.getTime() > now.getTime();
@@ -262,7 +262,7 @@ app.post("/stripe-webhook", express.raw({ type: "application/json" }), async (re
 
     if (hasActivePlan && !isSamePlan) {
       console.log("⏸️ ENTERING PAUSE LOGIC");
-  const shouldPauseCurrentPlan = currentPlan !== "free";
+  const shouldPauseCurrentPlan = !!currentPlan;
 
   if (shouldPauseCurrentPlan) {
     const remainingMs = currentExpiry.getTime() - now.getTime();
