@@ -237,7 +237,7 @@ app.post("/stripe-webhook", express.raw({ type: "application/json" }), async (re
     const now = new Date();
     const currentExpiry = listing.premium_expiry ? new Date(listing.premium_expiry) : null;
 
-   const currentPlan =
+   const currentPlan = previousPlan;
   listing.premium_level ||
   (listing.plan === "free" ? "club" : listing.plan) ||
   "club";
@@ -252,7 +252,13 @@ app.post("/stripe-webhook", express.raw({ type: "application/json" }), async (re
   internalPlanType,
   hasActivePlan,
   isSamePlan
-});
+  });
+
+  const previousPlan =
+  listing.premium_level ||
+  (listing.plan === "free" ? "club" : listing.plan) ||
+  "club";
+
     let listingUpdates = {
       updated_at: new Date().toISOString(),
       plan: internalPlanType,
