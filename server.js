@@ -233,98 +233,162 @@ app.post("/stripe-webhook", express.raw({ type: "application/json" }), async (re
   }
 
   // 6. Apply renewal / pause logic
-  for (const listing of listingsData) {
-    const now = new Date();
-    const currentExpiry = listing.premium_expiry ? new Date(listing.premium_expiry) : null;
+for (const listing of listingsData) {
+  const now = new Date();
+  const currentExpiry = listing.premium_expiry ? new Date(listing.premium_expiry) : null;
 
-const previousPlan =
-  listing.premium_level ||
-  (listing.plan === "free" ? "club" : listing.plan) ||
-  "club";
+  const previousPlan =
+    listing.premium_level ||
+    (listing.plan === "free" ? "club" : listing.plan) ||
+    "club";
 
-const hasActivePlan =
-  currentExpiry && currentExpiry.getTime() > now.getTime();
+  const hasActivePlan =
+    currentExpiry && currentExpiry.getTime() > now.getTime();
 
-const isSamePlan = previousPlan === internalPlanType;
+  const isSamePlan = previousPlan === internalPlanType;
 
-console.log("🧠 DEBUG PLAN CHECK", {
-  previousPlan,
-  internalPlanType,
-  hasActivePlan,
-  isSamePlan,
-  listingPlan: listing.plan,
-  listingPremiumLevel: listing.premium_level,
-  premiumExpiry: listing.premium_expiry,
-});
+  const previousPlanRank = PLAN_RANK[previousPlan] ?? 0;
+  const newPlanRank = PLAN_RANK[internalPlanType] ?? 0;
 
-    let listingUpdates = {
-      updated_at: new Date().toISOString(),
-      plan: internalPlanType,
-      premium_level: internalPlanType === "club" ? "" : internalPlanType,
-      boosted: false,
-    };
+  const isUpgrade = newPlanRank > previousPlanRank;
+  const isDowngrade = newPlanRank < previousPlanRank;
 
-    if (hasActivePlan && !isSamePlan) {
-      console.log("⏸️ ENTERING PAUSE LOGIC");
-  const shouldPauseCurrentPlan = !!previousPlan;
+  console.log("🧠 DEBUG PLAN CHECK", {
+    previousPlan,
+    internalPlanType,
+    hasActivePlan,
+    isSamePlan,
+    isUpgrade,
+    isDowngrade,
+    listingPlan: listing.plan,
+    listingPremiumLevel: listing.premium_level,
+    premiumExpiry: listing.premium_expiry,
+  });
 
-  if (shouldPauseCurrentPlan) {
+  // CAS 1 : même plan => prolongation
+  if (hasActivePlan && isSamePlan) {
+    const newExpiry = new Date(currentExpiry);
+    newExpiry.setDate(newExpiry.getDate() + durationDays);
+
+    const { error: listingUpdateError } = await supabase
+      .from("listings")
+      .update({
+        updated_at: new Date().toISOString(),
+        premium_expiry: newExpiry.toISOString(),
+      })
+      .eq("id", listing.id);
+
+    if (listingUpdateError) {
+      console.error(
+        `❌ Failed to extend listing ${listing.id}:`,
+        listingUpdateError.message
+      );
+      throw listingUpdateError;
+    }
+
+    continue;
+  }
+
+  // CAS 2 : downgrade => on garde le plan actif,
+  // on stocke le plan acheté pour plus tard dans paused_plans
+  if (hasActivePlan && isDowngrade) {
+    const downgradeHours = Math.max(0, durationDays * 24);
+
+    console.log("📦 STORING DOWNGRADE FOR LATER", {
+      userId,
+      listingId: listing.id,
+      internalPlanType,
+      downgradeHours,
+    });
+
+    const { error: pausedPlanError } = await supabase
+      .from("paused_plans")
+      .insert({
+        user_id: userId,
+        listing_id: listing.id,
+        plan_type: internalPlanType,
+        remaining_hours: downgradeHours,
+      });
+
+    if (pausedPlanError) {
+      console.error("❌ DOWNGRADE PAUSED PLAN INSERT ERROR:", pausedPlanError);
+      throw pausedPlanError;
+    } else {
+      console.log("✅ DOWNGRADE STORED IN PAUSED_PLANS");
+    }
+
+    // IMPORTANT : on ne touche pas au plan actif
+    continue;
+  }
+
+  // CAS 3 : upgrade => on met l'ancien plan en pause, puis on active le nouveau
+  let listingUpdates = {
+    updated_at: new Date().toISOString(),
+    plan: internalPlanType,
+    premium_level: internalPlanType === "club" ? "" : internalPlanType,
+    boosted: false,
+  };
+
+  if (hasActivePlan && isUpgrade) {
+    console.log("⏸️ ENTERING UPGRADE PAUSE LOGIC");
+
     const remainingMs = currentExpiry.getTime() - now.getTime();
     const remainingHours = Math.max(
       0,
       Math.ceil(remainingMs / (1000 * 60 * 60))
     );
 
-   console.log("🧠 PAUSE DETAILS", {
-  userId,
-  listingId: listing.id,
-  previousPlan,
-  remainingHours,
-});
+    console.log("🧠 PAUSE DETAILS", {
+      userId,
+      listingId: listing.id,
+      previousPlan,
+      remainingHours,
+    });
 
-const { error: pausedPlanError } = await supabase
-  .from("paused_plans")
-  .insert({
-    user_id: userId,
-    listing_id: listing.id,
-    plan_type: previousPlan,
-    remaining_hours: remainingHours,
-  });
+    const { error: pausedPlanError } = await supabase
+      .from("paused_plans")
+      .insert({
+        user_id: userId,
+        listing_id: listing.id,
+        plan_type: previousPlan,
+        remaining_hours: remainingHours,
+      });
 
-if (pausedPlanError) {
-  console.error("❌ PAUSED PLAN INSERT ERROR:", pausedPlanError);
-} else {
-  console.log("✅ PAUSED PLAN INSERTED");
-}
-  }
-
-  const newExpiry = new Date(now);
-  newExpiry.setDate(newExpiry.getDate() + durationDays);
-  listingUpdates.premium_expiry = newExpiry.toISOString();
-} else {
-  const baseDate =
-    currentExpiry && currentExpiry.getTime() > now.getTime()
-      ? currentExpiry
-      : now;
-
-  const newExpiry = new Date(baseDate);
-  newExpiry.setDate(newExpiry.getDate() + durationDays);
-  listingUpdates.premium_expiry = newExpiry.toISOString();
-}
-
-    const { error: listingUpdateError } = await supabase
-      .from("listings")
-      .update(listingUpdates)
-      .eq("id", listing.id);
-
-    if (listingUpdateError) {
-      console.error(
-        `❌ Failed to update listing ${listing.id}:`,
-        listingUpdateError.message
-      );
-      throw listingUpdateError;
+    if (pausedPlanError) {
+      console.error("❌ PAUSED PLAN INSERT ERROR:", pausedPlanError);
+      throw pausedPlanError;
+    } else {
+      console.log("✅ PAUSED PLAN INSERTED");
     }
+
+    const newExpiry = new Date(now);
+    newExpiry.setDate(newExpiry.getDate() + durationDays);
+    listingUpdates.premium_expiry = newExpiry.toISOString();
+  } else {
+    // CAS 4 : pas de plan actif => activation simple
+    const baseDate =
+      currentExpiry && currentExpiry.getTime() > now.getTime()
+        ? currentExpiry
+        : now;
+
+    const newExpiry = new Date(baseDate);
+    newExpiry.setDate(newExpiry.getDate() + durationDays);
+    listingUpdates.premium_expiry = newExpiry.toISOString();
   }
+
+  const { error: listingUpdateError } = await supabase
+    .from("listings")
+    .update(listingUpdates)
+    .eq("id", listing.id);
+
+  if (listingUpdateError) {
+    console.error(
+      `❌ Failed to update listing ${listing.id}:`,
+      listingUpdateError.message
+    );
+    throw listingUpdateError;
+  }
+}
 
   console.log("✅ Platform plan activated successfully.");
   break;
