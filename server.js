@@ -237,27 +237,25 @@ app.post("/stripe-webhook", express.raw({ type: "application/json" }), async (re
     const now = new Date();
     const currentExpiry = listing.premium_expiry ? new Date(listing.premium_expiry) : null;
 
-   const currentPlan = previousPlan;
+const previousPlan =
   listing.premium_level ||
   (listing.plan === "free" ? "club" : listing.plan) ||
   "club";
 
-    const hasActivePlan =
-      currentExpiry && currentExpiry.getTime() > now.getTime();
+const hasActivePlan =
+  currentExpiry && currentExpiry.getTime() > now.getTime();
 
-    const isSamePlan = currentPlan === internalPlanType;
+const isSamePlan = previousPlan === internalPlanType;
 
-    console.log("🧠 DEBUG PLAN CHECK", {
-  currentPlan,
+console.log("🧠 DEBUG PLAN CHECK", {
+  previousPlan,
   internalPlanType,
   hasActivePlan,
-  isSamePlan
-  });
-
-  const previousPlan =
-  listing.premium_level ||
-  (listing.plan === "free" ? "club" : listing.plan) ||
-  "club";
+  isSamePlan,
+  listingPlan: listing.plan,
+  listingPremiumLevel: listing.premium_level,
+  premiumExpiry: listing.premium_expiry,
+});
 
     let listingUpdates = {
       updated_at: new Date().toISOString(),
@@ -268,7 +266,7 @@ app.post("/stripe-webhook", express.raw({ type: "application/json" }), async (re
 
     if (hasActivePlan && !isSamePlan) {
       console.log("⏸️ ENTERING PAUSE LOGIC");
-  const shouldPauseCurrentPlan = !!currentPlan;
+  const shouldPauseCurrentPlan = !!previousPlan;
 
   if (shouldPauseCurrentPlan) {
     const remainingMs = currentExpiry.getTime() - now.getTime();
@@ -280,7 +278,7 @@ app.post("/stripe-webhook", express.raw({ type: "application/json" }), async (re
    console.log("🧠 PAUSE DETAILS", {
   userId,
   listingId: listing.id,
-  currentPlan,
+  previousPlan,
   remainingHours,
 });
 
@@ -289,7 +287,7 @@ const { error: pausedPlanError } = await supabase
   .insert({
     user_id: userId,
     listing_id: listing.id,
-    plan_type: currentPlan,
+    plan_type: previousPlan,
     remaining_hours: remainingHours,
   });
 
