@@ -14,6 +14,13 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+const PLAN_RANK = {
+  club: 0,
+  privilege: 1,
+  elite: 2,
+  supreme: 3,
+};
+
 function computeDiscount(profile, internalPlanType) {
   const isPremiumPlan = ["privilege", "elite", "supreme"].includes(internalPlanType);
 
@@ -365,16 +372,25 @@ for (const listing of listingsData) {
     newExpiry.setDate(newExpiry.getDate() + durationDays);
     listingUpdates.premium_expiry = newExpiry.toISOString();
   } else {
+      console.log("🔥 ENTERING CAS 4 (NO ACTIVE PLAN)");
     // CAS 4 : pas de plan actif => activation simple
-    const baseDate =
-      currentExpiry && currentExpiry.getTime() > now.getTime()
-        ? currentExpiry
-        : now;
+     const baseDate =
+    currentExpiry && currentExpiry.getTime() > now.getTime()
+      ? currentExpiry
+      : now;
 
-    const newExpiry = new Date(baseDate);
-    newExpiry.setDate(newExpiry.getDate() + durationDays);
-    listingUpdates.premium_expiry = newExpiry.toISOString();
-  }
+  const newExpiry = new Date(baseDate);
+  newExpiry.setDate(newExpiry.getDate() + durationDays);
+
+  console.log("📦 NEW EXPIRY CALCULATED", {
+    baseDate,
+    durationDays,
+    newExpiry: newExpiry.toISOString(),
+  });
+
+  listingUpdates.premium_expiry = newExpiry.toISOString();
+}
+     console.log("📦 FINAL UPDATE PAYLOAD", listingUpdates);
 
   const { error: listingUpdateError } = await supabase
     .from("listings")
