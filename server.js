@@ -161,20 +161,6 @@ app.post("/stripe-webhook", express.raw({ type: "application/json" }), async (re
     throw checkoutPaidError;
   }
 
-  // 3. Update provider_profiles.plan_type
-  const { error: profilePlanError } = await supabase
-    .from("provider_profiles")
-    .update({
-      plan_type: internalPlanType,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("user_id", userId);
-
-  if (profilePlanError) {
-    console.error("❌ Failed to update provider_profiles.plan_type:", profilePlanError.message);
-    throw profilePlanError;
-  }
-
   // 4. Consume discount only after successful payment
   if (discountType === "founder") {
     const { data: profileData, error: founderFetchError } = await supabase
@@ -404,6 +390,20 @@ for (const listing of listingsData) {
     );
     throw listingUpdateError;
   }
+}
+
+// 7. Sync provider_profiles.plan_type only AFTER listings logic is complete
+const { error: profilePlanError } = await supabase
+  .from("provider_profiles")
+  .update({
+    plan_type: internalPlanType,
+    updated_at: new Date().toISOString(),
+  })
+  .eq("user_id", userId);
+
+if (profilePlanError) {
+  console.error("❌ Failed to update provider_profiles.plan_type:", profilePlanError.message);
+  throw profilePlanError;
 }
 
   console.log("✅ Platform plan activated successfully.");
