@@ -21,10 +21,20 @@ const PLAN_RANK = {
   supreme: 3,
 };
 
-function computeDiscount(profile, internalPlanType) {
-  const isPremiumPlan = ["privilege", "elite", "supreme"].includes(internalPlanType);
+const PREMIUM_PLAN_TYPES = ["privilege", "elite", "supreme"];
+const VALID_DISCOUNT_SELECTIONS = new Set([
+  "founder",
+  "referral",
+  "ambassador_coupon",
+  "none",
+]);
 
-  if (!isPremiumPlan) {
+function isPremiumPlan(internalPlanType) {
+  return PREMIUM_PLAN_TYPES.includes(internalPlanType);
+}
+
+function computeDiscount(profile, internalPlanType) {
+  if (!isPremiumPlan(internalPlanType)) {
     return {
       discountType: null,
       discountPercent: 0,
@@ -60,6 +70,183 @@ function computeDiscount(profile, internalPlanType) {
 function applyDiscount(amount, discountPercent) {
   const discounted = amount * (1 - discountPercent / 100);
   return Math.round(discounted * 100) / 100;
+}
+
+async function validateAmbassadorCoupon(couponId, userId) {
+  const { data, error } = await supabase
+    .from("ambassador_coupons")
+    .select("id, ambassador_user_id, status, discount_percent")
+    .eq("id", couponId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("❌ Failed to load ambassador coupon:", error.message);
+    return { ok: false, error: "coupon_lookup_failed" };
+  }
+
+  if (!data) {
+    return { ok: false, error: "coupon_not_found" };
+  }
+
+  if (data.ambassador_user_id !== userId) {
+    return { ok: false, error: "coupon_user_mismatch" };
+  }
+
+  if (data.status !== "available") {
+    return { ok: false, error: "coupon_not_available" };
+  }
+
+  if (Number(data.discount_percent) !== 20) {
+    return { ok: false, error: "invalid_coupon_percent" };
+  }
+
+  return { ok: true };
+}
+
+async function resolveCheckoutDiscount(
+  profile,
+  internalPlanType,
+  selectedDiscountType,
+  ambassadorCouponId,
+  userId
+) {
+  if (selectedDiscountType == null || selectedDiscountType === "") {
+    return computeDiscount(profile, internalPlanType);
+  }
+
+  const selection = String(selectedDiscountType).trim().toLowerCase();
+
+  if (!VALID_DISCOUNT_SELECTIONS.has(selection)) {
+    return { error: "invalid_discount_selection", status: 400 };
+  }
+
+  if (ambassadorCouponId && selection !== "ambassador_coupon") {
+    return { error: "invalid_discount_selection", status: 400 };
+  }
+
+  if (selection === "none") {
+    return { discountType: null, discountPercent: 0 };
+  }
+
+  if (!isPremiumPlan(internalPlanType)) {
+    return { error: "discount_not_allowed_for_plan", status: 400 };
+  }
+
+  if (selection === "founder") {
+    if (
+      !(
+        Number(profile?.founder_discount_count) > 0 &&
+        Number(profile?.founder_discount_percent) > 0
+      )
+    ) {
+      return { error: "discount_not_eligible", status: 400 };
+    }
+
+    return {
+      discountType: "founder",
+      discountPercent: Number(profile.founder_discount_percent),
+    };
+  }
+
+  if (selection === "referral") {
+    if (
+      !(
+        profile?.has_referral_discount === true &&
+        profile?.referral_discount_used === false
+      )
+    ) {
+      return { error: "discount_not_eligible", status: 400 };
+    }
+
+    return {
+      discountType: "referral",
+      discountPercent: 25,
+    };
+  }
+
+  if (selection === "ambassador_coupon") {
+    if (!ambassadorCouponId) {
+      return { error: "missing_ambassador_coupon_id", status: 400 };
+    }
+
+    const validation = await validateAmbassadorCoupon(ambassadorCouponId, userId);
+    if (!validation.ok) {
+      return { error: validation.error, status: 400 };
+    }
+
+    return {
+      discountType: "ambassador_coupon",
+      discountPercent: 20,
+      ambassadorCouponId,
+    };
+  }
+
+  return { error: "invalid_discount_selection", status: 400 };
+}
+
+async function releaseAmbassadorCouponForCheckout(checkoutId) {
+  const { data, error } = await supabase.rpc("release_ambassador_coupon", {
+    p_checkout_id: checkoutId,
+  });
+
+  if (error) {
+    console.error("❌ release_ambassador_coupon RPC failed:", error.message);
+    return { ok: false, error: error.message };
+  }
+
+  return data ?? { ok: true };
+}
+
+async function handlePlatformCheckoutSessionEnded(session, endReason) {
+  const metadata = session.metadata || {};
+
+  if (metadata.source !== "platform") {
+    return;
+  }
+
+  const checkoutId = metadata.checkout_id;
+  if (!checkoutId) {
+    console.error("❌ Missing checkout_id in Stripe metadata for", endReason);
+    return;
+  }
+
+  const { data: checkoutRecord, error: checkoutFetchError } = await supabase
+    .from("platform_checkouts")
+    .select("id, status, discount_type")
+    .eq("id", checkoutId)
+    .maybeSingle();
+
+  if (checkoutFetchError) {
+    console.error(
+      "❌ Failed to load platform checkout for release:",
+      checkoutFetchError.message
+    );
+    return;
+  }
+
+  if (!checkoutRecord || checkoutRecord.status === "paid") {
+    return;
+  }
+
+  if (checkoutRecord.discount_type === "ambassador_coupon") {
+    await releaseAmbassadorCouponForCheckout(checkoutId);
+  }
+
+  const { error: checkoutCancelError } = await supabase
+    .from("platform_checkouts")
+    .update({
+      status: "cancelled",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", checkoutId)
+    .eq("status", "pending");
+
+  if (checkoutCancelError) {
+    console.error(
+      "❌ Failed to mark checkout as cancelled:",
+      checkoutCancelError.message
+    );
+  }
 }
 
 // Webhook Stripe : DOIT être déclaré avant express.json()
@@ -113,6 +300,7 @@ app.post("/stripe-webhook", express.raw({ type: "application/json" }), async (re
       internal_plan_type,
       discount_type,
       discount_percent,
+      ambassador_coupon_id,
       status
     `)
     .eq("id", checkoutId)
@@ -200,6 +388,21 @@ app.post("/stripe-webhook", express.raw({ type: "application/json" }), async (re
     if (referralUpdateError) {
       console.error("❌ Failed to consume referral discount:", referralUpdateError.message);
       throw referralUpdateError;
+    }
+  } else if (discountType === "ambassador_coupon") {
+    const { data: consumeResult, error: consumeError } = await supabase.rpc(
+      "consume_ambassador_coupon",
+      { p_checkout_id: checkoutId }
+    );
+
+    if (consumeError) {
+      console.error("❌ consume_ambassador_coupon RPC failed:", consumeError.message);
+      throw consumeError;
+    }
+
+    if (consumeResult?.ok === false) {
+      console.error("❌ consume_ambassador_coupon returned error:", consumeResult);
+      throw new Error(consumeResult.error || "coupon_consume_failed");
     }
   }
 
@@ -410,6 +613,20 @@ if (profilePlanError) {
   break;
 }
 
+      case "checkout.session.expired": {
+        const session = event.data.object;
+        console.log("ℹ️ Checkout session expired:", session.id);
+        await handlePlatformCheckoutSessionEnded(session, "expired");
+        break;
+      }
+
+      case "checkout.session.async_payment_failed": {
+        const session = event.data.object;
+        console.log("ℹ️ Checkout async payment failed:", session.id);
+        await handlePlatformCheckoutSessionEnded(session, "async_payment_failed");
+        break;
+      }
+
       default:
         console.log(`ℹ️ Unhandled Stripe event type: ${event.type}`);
     }
@@ -520,8 +737,18 @@ app.post("/create-checkout", async (req, res) => {
 });
 
 app.post("/create-platform-checkout", async (req, res) => {
+  let checkoutId = null;
+  let reservedAmbassadorCoupon = false;
+
   try {
-    const { user_id, listing_id, plan_code, locale } = req.body;
+    const {
+      user_id,
+      listing_id,
+      plan_code,
+      locale,
+      selected_discount_type,
+      ambassador_coupon_id,
+    } = req.body;
 
     if (!user_id || !plan_code) {
       return res
@@ -535,7 +762,6 @@ app.post("/create-platform-checkout", async (req, res) => {
       return res.status(400).json({ error: "Invalid plan_code." });
     }
 
-    // 1. Load provider profile to determine active discount
     const { data: profile, error: profileError } = await supabase
       .from("provider_profiles")
       .select(`
@@ -552,15 +778,26 @@ app.post("/create-platform-checkout", async (req, res) => {
       return res.status(500).json({ error: "Unable to load provider profile" });
     }
 
-    const { discountType, discountPercent } = computeDiscount(
+    const discountResolution = await resolveCheckoutDiscount(
       profile,
-      plan.internalPlanType
+      plan.internalPlanType,
+      selected_discount_type,
+      ambassador_coupon_id,
+      user_id
     );
+
+    if (discountResolution.error) {
+      return res.status(discountResolution.status || 400).json({
+        error: discountResolution.error,
+      });
+    }
+
+    const { discountType, discountPercent } = discountResolution;
+    const ambassadorCouponId = discountResolution.ambassadorCouponId || null;
 
     const originalAmount = Number(plan.amount);
     const finalAmount = applyDiscount(originalAmount, discountPercent);
 
-    // 2. Create internal checkout record
     const { data: checkoutRecord, error: checkoutInsertError } = await supabase
       .from("platform_checkouts")
       .insert({
@@ -573,6 +810,7 @@ app.post("/create-platform-checkout", async (req, res) => {
         final_amount: finalAmount,
         discount_type: discountType,
         discount_percent: discountPercent,
+        ambassador_coupon_id: null,
         status: "pending",
         provider_name: "stripe",
         updated_at: new Date().toISOString(),
@@ -590,9 +828,37 @@ app.post("/create-platform-checkout", async (req, res) => {
         .json({ error: "Unable to create internal checkout record" });
     }
 
-    const checkoutId = checkoutRecord.id;
+    checkoutId = checkoutRecord.id;
 
-    // 3. Create Stripe checkout with only neutral metadata
+    if (discountType === "ambassador_coupon") {
+      const { data: reserveResult, error: reserveError } = await supabase.rpc(
+        "reserve_ambassador_coupon",
+        {
+          p_coupon_id: ambassadorCouponId,
+          p_checkout_id: checkoutId,
+          p_ambassador_user_id: user_id,
+        }
+      );
+
+      if (reserveError) {
+        console.error("❌ reserve_ambassador_coupon RPC failed:", reserveError.message);
+        await supabase.from("platform_checkouts").delete().eq("id", checkoutId);
+        checkoutId = null;
+        return res.status(400).json({ error: "coupon_not_available" });
+      }
+
+      if (!reserveResult?.ok) {
+        console.error("❌ reserve_ambassador_coupon returned error:", reserveResult);
+        await supabase.from("platform_checkouts").delete().eq("id", checkoutId);
+        checkoutId = null;
+        return res.status(400).json({
+          error: reserveResult?.error || "coupon_not_available",
+        });
+      }
+
+      reservedAmbassadorCoupon = true;
+    }
+
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       payment_method_types: ["card"],
@@ -618,7 +884,6 @@ app.post("/create-platform-checkout", async (req, res) => {
       },
     });
 
-    // 4. Save Stripe session id on internal checkout record
     const { error: checkoutUpdateError } = await supabase
       .from("platform_checkouts")
       .update({
@@ -637,6 +902,22 @@ app.post("/create-platform-checkout", async (req, res) => {
     return res.json({ checkoutUrl: session.url });
   } catch (error) {
     console.error("platform Stripe error:", error.message);
+
+    if (checkoutId && reservedAmbassadorCoupon) {
+      await releaseAmbassadorCouponForCheckout(checkoutId);
+    }
+
+    if (checkoutId) {
+      await supabase
+        .from("platform_checkouts")
+        .update({
+          status: "failed",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", checkoutId)
+        .eq("status", "pending");
+    }
+
     return res
       .status(500)
       .json({ error: "Unable to create platform checkout session" });
