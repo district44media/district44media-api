@@ -26,6 +26,7 @@ const VALID_DISCOUNT_SELECTIONS = new Set([
   "founder",
   "referral",
   "ambassador_coupon",
+  "welcome",
   "none",
 ]);
 
@@ -178,6 +179,24 @@ async function resolveCheckoutDiscount(
       discountType: "ambassador_coupon",
       discountPercent: 20,
       ambassadorCouponId,
+    };
+  }
+
+  if (selection === "welcome") {
+    if (
+      profile?.is_founder_by_city === true ||
+      profile?.is_founder === true
+    ) {
+      return { error: "discount_not_eligible", status: 400 };
+    }
+
+    if (Number(profile?.welcome_discount_count) <= 0) {
+      return { error: "discount_not_eligible", status: 400 };
+    }
+
+    return {
+      discountType: "welcome",
+      discountPercent: 25,
     };
   }
 
@@ -403,6 +422,32 @@ app.post("/stripe-webhook", express.raw({ type: "application/json" }), async (re
     if (consumeResult?.ok === false) {
       console.error("❌ consume_ambassador_coupon returned error:", consumeResult);
       throw new Error(consumeResult.error || "coupon_consume_failed");
+    }
+  } else if (discountType === "welcome") {
+    const { data: profileData, error: welcomeFetchError } = await supabase
+      .from("provider_profiles")
+      .select("welcome_discount_count")
+      .eq("user_id", userId)
+      .single();
+
+    if (welcomeFetchError) {
+      console.error("❌ Failed to load welcome discount count:", welcomeFetchError.message);
+      throw welcomeFetchError;
+    }
+
+    const nextCount = Math.max(0, Number(profileData?.welcome_discount_count || 0) - 1);
+
+    const { error: welcomeUpdateError } = await supabase
+      .from("provider_profiles")
+      .update({
+        welcome_discount_count: nextCount,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("user_id", userId);
+
+    if (welcomeUpdateError) {
+      console.error("❌ Failed to decrement welcome discount count:", welcomeUpdateError.message);
+      throw welcomeUpdateError;
     }
   }
 
@@ -768,7 +813,10 @@ app.post("/create-platform-checkout", async (req, res) => {
         founder_discount_count,
         founder_discount_percent,
         has_referral_discount,
-        referral_discount_used
+        referral_discount_used,
+        welcome_discount_count,
+        is_founder,
+        is_founder_by_city
       `)
       .eq("user_id", user_id)
       .single();
