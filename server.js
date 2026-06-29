@@ -740,7 +740,7 @@ app.post("/create-checkout", async (req, res) => {
     }
 
     if (parsedAmount < 10) {
-      return res.status(400).json({ error: "Minimum payment amount is €10." });
+      return res.status(400).json({ error: "Minimum payment amount is CHF 10." });
     }
 
     const session = await stripe.checkout.sessions.create({
@@ -750,7 +750,7 @@ app.post("/create-checkout", async (req, res) => {
       line_items: [
         {
           price_data: {
-            currency: "eur",
+            currency: "chf",
             product_data: {
               name: "Digital promotion services",
               description: description,
@@ -768,7 +768,7 @@ app.post("/create-checkout", async (req, res) => {
         company: company || "",
         invoice_reference: invoiceReference || "",
         service_description: description || "",
-        amount_eur: parsedAmount.toString(),
+        amount_chf: parsedAmount.toString(),
       },
     });
 
