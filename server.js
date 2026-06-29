@@ -292,8 +292,6 @@ app.post("/stripe-webhook", express.raw({ type: "application/json" }), async (re
 
   console.log("✅ Payment successful");
   console.log("Session ID:", session.id);
-  console.log("Customer email:", session.customer_email);
-  console.log("Metadata:", metadata);
 
   if (metadata.source !== "platform") {
     console.log("ℹ️ Non-platform checkout, skipping platform activation logic.");
