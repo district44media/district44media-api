@@ -1,0 +1,100 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* District·44·Media — Warm Premium Palette */
+    --background: 36 33% 97%;
+    --foreground: 30 10% 15%;
+
+    --card: 36 30% 99%;
+    --card-foreground: 30 10% 15%;
+
+    --popover: 36 30% 99%;
+    --popover-foreground: 30 10% 15%;
+
+    /* Primary: Muted Bronze / Copper */
+    --primary: 28 40% 45%;
+    --primary-foreground: 36 33% 97%;
+
+    /* Secondary */
+    --secondary: 36 20% 93%;
+    --secondary-foreground: 30 10% 20%;
+
+    /* Muted */
+    --muted: 36 15% 93%;
+    --muted-foreground: 30 8% 45%;
+
+    /* Accent */
+    --accent: 28 30% 90%;
+    --accent-foreground: 28 40% 35%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 30 15% 88%;
+    --input: 36 15% 92%;
+    --ring: 28 40% 45%;
+
+    --radius: 0.625rem;
+
+    --sidebar-background: 36 25% 96%;
+    --sidebar-foreground: 30 10% 20%;
+    --sidebar-primary: 28 40% 45%;
+    --sidebar-primary-foreground: 36 33% 97%;
+    --sidebar-accent: 36 20% 93%;
+    --sidebar-accent-foreground: 30 10% 20%;
+    --sidebar-border: 30 15% 88%;
+    --sidebar-ring: 28 40% 45%;
+  }
+
+  .dark {
+    --background: 30 10% 8%;
+    --foreground: 36 20% 92%;
+
+    --card: 30 10% 10%;
+    --card-foreground: 36 20% 92%;
+
+    --popover: 30 10% 10%;
+    --popover-foreground: 36 20% 92%;
+
+    --primary: 28 40% 55%;
+    --primary-foreground: 30 10% 8%;
+
+    --secondary: 30 10% 15%;
+    --secondary-foreground: 36 20% 90%;
+
+    --muted: 30 8% 18%;
+    --muted-foreground: 30 10% 55%;
+
+    --accent: 28 20% 20%;
+    --accent-foreground: 28 40% 70%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 30 8% 20%;
+    --input: 30 8% 15%;
+    --ring: 28 40% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  h1, h2, h3 {
+    font-family: 'DM Serif Display', serif;
+  }
+}

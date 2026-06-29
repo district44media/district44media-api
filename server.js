@@ -1,5 +1,7 @@
 require("dotenv").config();
 
+const path = require("path");
+const fs = require("fs");
 const express = require("express");
 const cors = require("cors");
 const Stripe = require("stripe");
@@ -7,6 +9,8 @@ const { createClient } = require("@supabase/supabase-js");
 const { PLAN_CATALOG } = require("./catalog/plans");
 
 const app = express();
+const FRONTEND_DIST = path.join(__dirname, "frontend", "dist");
+const FRONTEND_INDEX = path.join(FRONTEND_DIST, "index.html");
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 const supabase = createClient(
@@ -684,10 +688,6 @@ if (profilePlanError) {
 app.use(cors());
 app.use(express.json());
 
-app.get("/", (req, res) => {
-  res.send("D44M API running");
-});
-
 app.get("/health", (req, res) => {
   res.json({ status: "D44M API running" });
 });
@@ -969,6 +969,18 @@ app.post("/create-platform-checkout", async (req, res) => {
       .json({ error: "Unable to create platform checkout session" });
   }
 });
+
+if (fs.existsSync(FRONTEND_INDEX)) {
+  app.use(express.static(FRONTEND_DIST, { index: false }));
+  app.get(/.*/, (req, res) => {
+    res.sendFile(FRONTEND_INDEX);
+  });
+} else {
+  console.log("frontend/dist is missing and API-only mode is active");
+  app.get("/", (req, res) => {
+    res.send("D44M API running");
+  });
+}
 
 const PORT = process.env.PORT || 3000;
 

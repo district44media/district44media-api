@@ -4,7 +4,11 @@
   "description": "District44Media backend API for payments and Stripe integration",
   "main": "server.js",
   "scripts": {
+    "build": "npm ci --prefix frontend && npm run build --prefix frontend",
     "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "keywords": [],
   "author": "",
