@@ -31,6 +31,7 @@ const VALID_DISCOUNT_SELECTIONS = new Set([
   "referral",
   "ambassador_coupon",
   "welcome",
+  "birthday",
   "none",
 ]);
 
@@ -108,12 +109,53 @@ async function validateAmbassadorCoupon(couponId, userId) {
   return { ok: true };
 }
 
+async function validateBirthdayOffer(offerId, userId) {
+  const { data, error } = await supabase
+    .from("provider_birthday_offers")
+    .select("id, provider_user_id, status, discount_percent, expires_at")
+    .eq("id", offerId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("❌ Failed to load birthday offer:", error.message);
+    return { ok: false, error: "birthday_offer_lookup_failed" };
+  }
+
+  if (!data) {
+    return { ok: false, error: "birthday_offer_not_found" };
+  }
+
+  if (data.provider_user_id !== userId) {
+    return { ok: false, error: "birthday_offer_user_mismatch" };
+  }
+
+  if (data.status !== "available") {
+    return { ok: false, error: "birthday_offer_not_available" };
+  }
+
+  if (!data.expires_at || new Date(data.expires_at).getTime() <= Date.now()) {
+    return { ok: false, error: "birthday_offer_expired" };
+  }
+
+  const discountPercent = Number(data.discount_percent);
+  if (
+    !Number.isFinite(discountPercent) ||
+    discountPercent < 1 ||
+    discountPercent > 100
+  ) {
+    return { ok: false, error: "invalid_birthday_offer_percent" };
+  }
+
+  return { ok: true, discount_percent: discountPercent, offer_id: data.id };
+}
+
 async function resolveCheckoutDiscount(
   profile,
   internalPlanType,
   selectedDiscountType,
   ambassadorCouponId,
-  userId
+  userId,
+  birthdayOfferId
 ) {
   if (selectedDiscountType == null || selectedDiscountType === "") {
     return computeDiscount(profile, internalPlanType);
@@ -126,6 +168,10 @@ async function resolveCheckoutDiscount(
   }
 
   if (ambassadorCouponId && selection !== "ambassador_coupon") {
+    return { error: "invalid_discount_selection", status: 400 };
+  }
+
+  if (birthdayOfferId && selection !== "birthday") {
     return { error: "invalid_discount_selection", status: 400 };
   }
 
@@ -204,6 +250,23 @@ async function resolveCheckoutDiscount(
     };
   }
 
+  if (selection === "birthday") {
+    if (!birthdayOfferId) {
+      return { error: "missing_birthday_offer_id", status: 400 };
+    }
+
+    const validation = await validateBirthdayOffer(birthdayOfferId, userId);
+    if (!validation.ok) {
+      return { error: validation.error, status: 400 };
+    }
+
+    return {
+      discountType: "birthday",
+      discountPercent: validation.discount_percent,
+      birthdayOfferId,
+    };
+  }
+
   return { error: "invalid_discount_selection", status: 400 };
 }
 
@@ -214,6 +277,19 @@ async function releaseAmbassadorCouponForCheckout(checkoutId) {
 
   if (error) {
     console.error("❌ release_ambassador_coupon RPC failed:", error.message);
+    return { ok: false, error: error.message };
+  }
+
+  return data ?? { ok: true };
+}
+
+async function releaseBirthdayOfferForCheckout(checkoutId) {
+  const { data, error } = await supabase.rpc("release_birthday_offer", {
+    p_platform_checkout_id: checkoutId,
+  });
+
+  if (error) {
+    console.error("❌ release_birthday_offer RPC failed:", error.message);
     return { ok: false, error: error.message };
   }
 
@@ -253,6 +329,10 @@ async function handlePlatformCheckoutSessionEnded(session, endReason) {
 
   if (checkoutRecord.discount_type === "ambassador_coupon") {
     await releaseAmbassadorCouponForCheckout(checkoutId);
+  }
+
+  if (checkoutRecord.discount_type === "birthday") {
+    await releaseBirthdayOfferForCheckout(checkoutId);
   }
 
   const { error: checkoutCancelError } = await supabase
@@ -450,6 +530,21 @@ app.post("/stripe-webhook", express.raw({ type: "application/json" }), async (re
     if (welcomeUpdateError) {
       console.error("❌ Failed to decrement welcome discount count:", welcomeUpdateError.message);
       throw welcomeUpdateError;
+    }
+  } else if (discountType === "birthday") {
+    const { data: consumeResult, error: consumeError } = await supabase.rpc(
+      "consume_birthday_offer",
+      { p_platform_checkout_id: checkoutId }
+    );
+
+    if (consumeError) {
+      console.error("❌ consume_birthday_offer RPC failed:", consumeError.message);
+      throw consumeError;
+    }
+
+    if (consumeResult?.ok === false) {
+      console.error("❌ consume_birthday_offer returned error:", consumeResult);
+      throw new Error(consumeResult.error || "birthday_offer_consume_failed");
     }
   }
 
@@ -782,6 +877,7 @@ app.post("/create-checkout", async (req, res) => {
 app.post("/create-platform-checkout", async (req, res) => {
   let checkoutId = null;
   let reservedAmbassadorCoupon = false;
+  let reservedBirthdayOffer = false;
 
   try {
     const {
@@ -791,6 +887,7 @@ app.post("/create-platform-checkout", async (req, res) => {
       locale,
       selected_discount_type,
       ambassador_coupon_id,
+      birthday_offer_id,
     } = req.body;
 
     if (!user_id || !plan_code) {
@@ -829,7 +926,8 @@ app.post("/create-platform-checkout", async (req, res) => {
       plan.internalPlanType,
       selected_discount_type,
       ambassador_coupon_id,
-      user_id
+      user_id,
+      birthday_offer_id
     );
 
     if (discountResolution.error) {
@@ -840,6 +938,7 @@ app.post("/create-platform-checkout", async (req, res) => {
 
     const { discountType, discountPercent } = discountResolution;
     const ambassadorCouponId = discountResolution.ambassadorCouponId || null;
+    const birthdayOfferId = discountResolution.birthdayOfferId || null;
 
     const originalAmount = Number(plan.amount);
     const finalAmount = applyDiscount(originalAmount, discountPercent);
@@ -905,6 +1004,35 @@ app.post("/create-platform-checkout", async (req, res) => {
       reservedAmbassadorCoupon = true;
     }
 
+    if (discountType === "birthday") {
+      const { data: reserveResult, error: reserveError } = await supabase.rpc(
+        "reserve_birthday_offer",
+        {
+          p_offer_id: birthdayOfferId,
+          p_platform_checkout_id: checkoutId,
+          p_user_id: user_id,
+        }
+      );
+
+      if (reserveError) {
+        console.error("❌ reserve_birthday_offer RPC failed:", reserveError.message);
+        await supabase.from("platform_checkouts").delete().eq("id", checkoutId);
+        checkoutId = null;
+        return res.status(400).json({ error: "birthday_offer_not_available" });
+      }
+
+      if (!reserveResult?.ok) {
+        console.error("❌ reserve_birthday_offer returned error:", reserveResult);
+        await supabase.from("platform_checkouts").delete().eq("id", checkoutId);
+        checkoutId = null;
+        return res.status(400).json({
+          error: reserveResult?.error || "birthday_offer_not_available",
+        });
+      }
+
+      reservedBirthdayOffer = true;
+    }
+
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       payment_method_types: ["card"],
@@ -951,6 +1079,10 @@ app.post("/create-platform-checkout", async (req, res) => {
 
     if (checkoutId && reservedAmbassadorCoupon) {
       await releaseAmbassadorCouponForCheckout(checkoutId);
+    }
+
+    if (checkoutId && reservedBirthdayOffer) {
+      await releaseBirthdayOfferForCheckout(checkoutId);
     }
 
     if (checkoutId) {
